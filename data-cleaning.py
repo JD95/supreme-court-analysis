@@ -30,7 +30,10 @@ def is_not_end_of_case(line):
 
 def grab_next_case(file):
     file = I.dropwhile(is_not_case_title, file)
-    return I.takewhile(is_not_end_of_case, file)
+    c, f = I.tee(file)
+    case = I.takewhile(is_not_end_of_case, c)
+    file = I.dropwhile(is_not_end_of_case, f)
+    return (case, file)
 
 
 
@@ -45,11 +48,12 @@ def clean_data():
         file = filter(lambda x: not re.match(r'^\s*$', x), file)
         file = map(lambda x: x.rstrip('\n'), file)
 
-        case1 = grab_next_case(file)
-        case2 = grab_next_case(file)
+        (case1, file) = grab_next_case(file)
+        (case2, file) = grab_next_case(file)
         
         for line in I.islice(case1, 0, 5):
             print(line)
-            
-        for line in I.islice(case2, 0, 5):
-            print(line)
+
+        print(list(case2)[0])
+#        for line in I.islice(case2, 0, 5):
+#            print(line)
