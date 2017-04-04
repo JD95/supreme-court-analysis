@@ -18,21 +18,29 @@ import Control.Arrow
 import Control.Monad
 import qualified Control.Monad.State.Lazy as ST
 
+upperLetter = R.satisfy isUpper
+
+manyTill1 r end = do
+    s <- r
+    ss <- R.manyTill r end
+    return (s:ss)
+
 -- | Reads in 
-entityName = do
-    name <- R.many1 (R.try R.letter <|> R.digit)
-    dot <- R.option " " (R.try (R.string ".") <|> R.string ",")
+entityName letterCase = do
+    s <- letterCase
+    name <- R.many' (R.try letterCase <|> R.digit)
+    dot <- R.option " " (R.try (R.string ".") <|> R.try (R.string ", INC.") <|> R.string ",")
     R.option ' ' R.space
-    return (T.pack name <> T.fromStrict dot)
+    return (T.pack (s:name) <> T.fromStrict dot)
 
 
 -- | Parses an opinion name from the table of contents
 --   with the appelant entity given before the
---   defendant and seperated by a "v.".
+    --   defendant and seperated by a "v.".
 --   eg. Wright v. Nix . . . . . . . . . . . . . 838
 appelantDefendant = do
-    appelant <- R.manyTill entityName (R.string "v. ")
-    defendant <- R.manyTill entityName (R.string ". ")
+    appelant <- R.manyTill (entityName R.letter) (R.string "v. ")
+    defendant <- R.manyTill (entityName R.letter) (R.string ". ")
     return $ (T.concat appelant, T.concat defendant)
 
 -- | Similar to appelantDefendant except the entities
@@ -42,8 +50,8 @@ appelantDefendant = do
 --
 --   eg. Yelder; Alabama v.  . . . . . . . . . . 898
 defendantAppelant = do
-    defendant <- R.manyTill entityName (R.string "; ")
-    appelant <- R.manyTill entityName (R.string "v. ")
+    defendant <- R.manyTill (entityName R.letter) (R.string "; ")
+    appelant <- R.manyTill (entityName R.letter) (R.string "v. ")
     return (T.concat appelant, T.concat defendant)
 
 -- | Parses an opinion name from the table of contents
@@ -77,10 +85,11 @@ parse r = isJust . R.maybeResult . R.parse r
 
 opinionTitle :: T.Text -> Bool
 opinionTitle = parse $ do
-    entityName
-    R.string "v."
-    R.try R.space
-    entityName
+    manyTill1 (entityName upperLetter) (R.string "v. ")
+    R.many1 (entityName upperLetter)
+    R.option "" (R.option "" (R.string ", ") >> R.string "et al.")
+    R.many' R.space
+    R.endOfInput
 
 -- A line reading "It is so ordered."
 endOfCase = parse $ R.try (R.string "It is so ordered.") <|> R.string "Affirmed." >> R.many' R.anyChar
