@@ -27,7 +27,8 @@ manyTill1 r end = do
 
 -- | Reads in 
 entityName letterCase = do
-    s <- letterCase
+    R.option " " (R.string "Mc")
+    s <- letterCase    
     name <- R.many' (R.try letterCase <|> R.digit)
     dot <- R.option " " (R.try (R.string ".") <|> R.try (R.string ", INC.") <|> R.string ",")
     R.option ' ' R.space
@@ -92,7 +93,10 @@ opinionTitle = parse $ do
     R.endOfInput
 
 -- A line reading "It is so ordered."
-endOfCase = parse $ R.try (R.string "It is so ordered.") <|> R.string "Affirmed." >> R.many' R.anyChar
+endOfCase = parse $ R.try (R.string "It is so ordered.")
+            <|> R.string "Affirmed."
+            <|> R.string "Reversed."
+            >> R.many' R.anyChar
 
 opinionHeading caseName = parse $  R.many1 R.digit >>  R.space >>  R.string caseName
 
@@ -146,11 +150,11 @@ cleanData = do
     --mapM_ print . take 5 $ toc
     -- Take the toc and fold it using the cases
     --print $ take 10 cases
-    print $ take 5 toc 
-    let f = foldr1 (>=>) $ fmap opinion $ take 10 toc
+    let f = foldr1 (>=>) $ fmap opinion $ toc
     let g [] = ""
         g (h:t) = h
-    mapM_ (TIO.putStrLn . T.toStrict . g) $ ST.evalState (f []) cases
+    let opinionText = ST.evalState (f []) cases
+    mapM_ print $ (fmap head . reverse . filter ((/=)[]) $ opinionText)
       
     
     
