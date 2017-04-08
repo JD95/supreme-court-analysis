@@ -30,7 +30,10 @@ entityName letterCase = do
     R.option " " (R.string "Mc")
     s <- letterCase    
     name <- R.many' (R.try letterCase <|> R.digit)
-    dot <- R.option " " (R.try (R.string ".") <|> R.try (R.string ", INC.") <|> R.string ",")
+    dot <- R.option " " (R.try (R.string ".")
+                         <|> R.try (R.string " &")
+                         <|> R.try (R.string ", INC.")
+                         <|> R.string ",")
     R.option ' ' R.space
     return (T.pack (s:name) <> T.fromStrict dot)
 
@@ -83,6 +86,8 @@ parseTOC = first (nub . toc) . span (not . opinionsStart) . drop 1 . dropWhile (
               
 parse :: R.Parser a -> T.Text -> Bool
 parse r = isJust . R.maybeResult . R.parse r
+
+amp = R.string "&"
 
 opinionTitle :: T.Text -> Bool
 opinionTitle = parse $ do
@@ -144,7 +149,7 @@ cleanOpinion opinionName
 
 cleanData :: IO()
 cleanData = do
-    let filePath = "../data/502.txt"
+    let filePath = "../data/503.txt"
     print $ "Cleaning " ++ filePath
     (toc, cases) <- parseTOC . T.lines . T.fromStrict <$> TIO.readFile filePath
     --mapM_ print . take 5 $ toc
