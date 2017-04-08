@@ -27,9 +27,13 @@ manyTill1 r end = do
 
 -- | Reads in 
 entityName letterCase = do
-    s <- letterCase
+    R.option " " (R.string "Mc")
+    s <- letterCase    
     name <- R.many' (R.try letterCase <|> R.digit)
-    dot <- R.option " " (R.try (R.string ".") <|> R.try (R.string ", INC.") <|> R.string ",")
+    dot <- R.option " " (R.try (R.string ".")
+                         <|> R.try (R.string " &")
+                         <|> R.try (R.string ", INC.")
+                         <|> R.string ",")
     R.option ' ' R.space
     return (T.pack (s:name) <> T.fromStrict dot)
 
@@ -83,6 +87,8 @@ parseTOC = first (nub . toc) . span (not . opinionsStart) . drop 1 . dropWhile (
 parse :: R.Parser a -> T.Text -> Bool
 parse r = isJust . R.maybeResult . R.parse r
 
+amp = R.string "&"
+
 opinionTitle :: T.Text -> Bool
 opinionTitle = parse $ do
     manyTill1 (entityName upperLetter) (R.string "v. ")
@@ -92,7 +98,10 @@ opinionTitle = parse $ do
     R.endOfInput
 
 -- A line reading "It is so ordered."
-endOfCase = parse $ R.try (R.string "It is so ordered.") <|> R.string "Affirmed." >> R.many' R.anyChar
+endOfCase = parse $ R.try (R.string "It is so ordered.")
+            <|> R.string "Affirmed."
+            <|> R.string "Reversed."
+            >> R.many' R.anyChar
 
 opinionHeading caseName = parse $  R.many1 R.digit >>  R.space >>  R.string caseName
 
@@ -140,17 +149,17 @@ cleanOpinion opinionName
 
 cleanData :: IO()
 cleanData = do
-    let filePath = "../data/502.txt"
+    let filePath = "../data/503.txt"
     print $ "Cleaning " ++ filePath
     (toc, cases) <- parseTOC . T.lines . T.fromStrict <$> TIO.readFile filePath
     --mapM_ print . take 5 $ toc
     -- Take the toc and fold it using the cases
     --print $ take 10 cases
-    print $ take 5 toc 
-    let f = foldr1 (>=>) $ fmap opinion $ take 10 toc
+    let f = foldr1 (>=>) $ fmap opinion $ toc
     let g [] = ""
         g (h:t) = h
-    mapM_ (TIO.putStrLn . T.toStrict . g) $ ST.evalState (f []) cases
+    let opinionText = ST.evalState (f []) cases
+    mapM_ print $ (fmap head . reverse . filter ((/=)[]) $ opinionText)
       
     
     
