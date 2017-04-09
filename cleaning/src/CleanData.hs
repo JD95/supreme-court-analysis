@@ -18,6 +18,14 @@ import Control.Arrow
 import Control.Monad
 import qualified Control.Monad.State.Lazy as ST
 
+data CaseOpinion  = CaseOpinion { caseName :: T.Text
+                                , caseAuthor :: T.Text
+                                , caseBody :: [T.Text]
+                                } deriving (Eq)
+
+instance Show CaseOpinion where
+    show c = show (caseName c) ++ "-" ++ show (caseAuthor c)
+
 upperLetter = R.satisfy isUpper
 
 manyTill1 r end = do
@@ -35,7 +43,7 @@ entityName letterCase = do
                          <|> R.try (R.string ", INC.")
                          <|> R.string ",")
     R.option ' ' R.space
-    return (T.pack (s:name) <> T.fromStrict dot)
+    return (T.pack (s:name) <> (T.fromStrict dot))
 
 
 -- | Parses an opinion name from the table of contents
@@ -117,7 +125,7 @@ joiningJustices = do
 
 additionalOpinion opinionType = do
     R.string "Justice "
-    lastName <- R.many1 R.letter
+    lastName <- R.many1 (R.try R.letter <|> R.char '\'')
     R.string ","
     R.space
     R.option " " $ joiningJustices
@@ -129,9 +137,9 @@ additionalOpinion opinionType = do
 --       Justice Stevens, with whom Justice Blackmun and Justice O'Connor join, dissenting.
 dissent = additionalOpinion "dissenting."
 
-opinion :: T.Text -> [[T.Text]] -> ST.State [T.Text] [[T.Text]]
-opinion opinionName cases = do
-    ST.modify (dropWhile (not . opinionTitle)) -- (opinionName `T.isPrefixOf`) . formatOpinionName))
+opinion :: [[T.Text]] -> ST.State [T.Text] [[T.Text]]
+opinion cases = do
+    ST.modify (dropWhile (not . opinionTitle))
     (c, file) <- span (not . endOfCase) <$> ST.get
     ST.put file
     return $ c:cases
@@ -147,23 +155,39 @@ cleanOpinion opinionName
     . filter ("" /=)
     . filter ((opinionName `T.isSuffixOf`) . formatOpinionName)
 
+author = R.try (R.string "Per Curiam.") <|> do
+          R.string "Justice "
+          name <- R.many1 (R.try R.letter <|> R.char '\'')
+          R.space
+          R.string "delivered the opinion of the Court."
+          return . T.toStrict $ T.pack name
+
+extractAuthor :: [T.Text] -> Maybe CaseOpinion
+extractAuthor c = do
+    let auth = catMaybes . fmap (R.maybeResult . R.parse author) $ c
+    case auth of
+      (a:_) -> return $ CaseOpinion (head c) (T.fromStrict a) c
+      _ -> Nothing
+
 cleanData :: IO()
 cleanData = do
-    let filePath = "../data/503.txt"
+    let filePath = "../data/502.txt"
     print $ "Cleaning " ++ filePath
-    (toc, cases) <- parseTOC . T.lines . T.fromStrict <$> TIO.readFile filePath
-    --mapM_ print . take 5 $ toc
-    -- Take the toc and fold it using the cases
-    --print $ take 10 cases
-    let f = foldr1 (>=>) $ fmap opinion $ toc
-    let g [] = ""
-        g (h:t) = h
-    let opinionText = ST.evalState (f []) cases
-    mapM_ print $ (fmap head . reverse . filter ((/=)[]) $ opinionText)
+    (_, cases) <- parseTOC . T.lines . T.fromStrict <$> TIO.readFile filePath
+    --print . take 20 $ cases
+    let f = foldr1 (>=>) . take 20 $ cycle [opinion]
+    mapM_ (print . extractAuthor) $ ST.evalState (f []) cases
       
     
     
     
     
+
+
+
+
+
+
+
 
 
