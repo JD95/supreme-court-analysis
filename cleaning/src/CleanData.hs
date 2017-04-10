@@ -20,6 +20,7 @@ import qualified Control.Monad.State.Lazy as ST
 
 data CaseOpinion  = CaseOpinion { caseName :: T.Text
                                 , caseAuthor :: T.Text
+                                , caseDescription :: [T.Text]
                                 , caseBody :: [T.Text]
                                 } deriving (Eq)
 
@@ -37,7 +38,7 @@ manyTill1 r end = do
 entityName letterCase = do
     R.option " " (R.string "Mc")
     s <- letterCase    
-    name <- R.many' (R.try letterCase <|> R.digit)
+    name <- R.many' (R.try letterCase <|> R.try R.digit <|> R.char '-')
     dot <- R.option " " (R.try (R.string ".")
                          <|> R.try (R.string " &")
                          <|> R.try (R.string ", INC.")
@@ -107,6 +108,7 @@ opinionTitle = parse $ do
 
 -- A line reading "It is so ordered."
 endOfCase = parse $ R.try (R.string "It is so ordered.")
+            <|> R.try (R.string "So ordered.")
             <|> R.string "Affirmed."
             <|> R.string "Reversed."
             >> R.many' R.anyChar
@@ -156,18 +158,20 @@ cleanOpinion opinionName
     . filter ((opinionName `T.isSuffixOf`) . formatOpinionName)
 
 author = R.try (R.string "Per Curiam.") <|> do
+          R.option " " (R.string "Chief ")
           R.string "Justice "
           name <- R.many1 (R.try R.letter <|> R.char '\'')
           R.space
-          R.string "delivered the opinion of the Court."
+          R.string "delivered the opinion of the"
           return . T.toStrict $ T.pack name
 
 extractAuthor :: [T.Text] -> Maybe CaseOpinion
 extractAuthor c = do
-    let auth = catMaybes . fmap (R.maybeResult . R.parse author) $ c
-    case auth of
-      (a:_) -> return $ CaseOpinion (head c) (T.fromStrict a) c
+    case span (not . parse author) $ c of
+      (desc, a:op) -> let Just auth = R.maybeResult . R.parse author $ a
+                      in  return $ CaseOpinion (head desc) (T.fromStrict auth) (tail desc) op
       _ -> Nothing
+
 
 cleanData :: IO()
 cleanData = do
