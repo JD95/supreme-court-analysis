@@ -18,6 +18,8 @@ import Control.Arrow
 import Control.Monad
 import qualified Control.Monad.State.Lazy as ST
 
+import System.Directory
+
 data CaseOpinion  = CaseOpinion { caseName :: T.Text
                                 , caseAuthor :: T.Text
                                 , caseDescription :: [T.Text]
@@ -173,14 +175,21 @@ extractAuthor c = do
       _ -> Nothing
 
 
+formatFileName = filter ('.'/=).filter ('_'/=)
+
 cleanData :: IO()
 cleanData = do
-    let filePath = "../data/502.txt"
-    print $ "Cleaning " ++ filePath
-    (_, cases) <- parseTOC . T.lines . T.fromStrict <$> TIO.readFile filePath
-    --print . take 20 $ cases
-    let f = foldr1 (>=>) . take 20 $ cycle [opinion]
-    mapM_ (print . extractAuthor) $ ST.evalState (f []) cases
+    forM_ (fmap (\n -> "../data/" ++ show n ++ ".txt") [502..564]) $ \filePath -> do
+        print $ "Cleaning " ++ filePath
+        (_, cases) <- parseTOC . T.lines . T.fromStrict <$> TIO.readFile filePath
+        let f = foldr1 (>=>) . take 20 $ cycle [opinion]
+        let opinions = catMaybes . fmap extractAuthor $ ST.evalState (f []) cases
+        forM_ opinions $ \(CaseOpinion name auth _ body) -> do
+            let file' = (T.unpack $ "../data/" <> auth <> "/" <> name <> ".txt") 
+            let body' = (T.toStrict $ T.concat body)
+            createDirectoryIfMissing False (T.unpack $ "../data/" <> auth)
+            TIO.writeFile file' body'
+        
       
     
     
