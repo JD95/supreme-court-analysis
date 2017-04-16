@@ -175,15 +175,15 @@ extractAuthor c = do
       _ -> Nothing
 
 
-formatFileName = filter ('.'/=).filter ('_'/=)
-
 cleanData :: IO()
 cleanData = do
+    -- For every pdf file
     forM_ (fmap (\n -> "../data/" ++ show n ++ ".txt") [502..564]) $ \filePath -> do
         print $ "Cleaning " ++ filePath
         (_, cases) <- parseTOC . T.lines . T.fromStrict <$> TIO.readFile filePath
         let f = foldr1 (>=>) . take 20 $ cycle [opinion]
         let opinions = catMaybes . fmap extractAuthor $ ST.evalState (f []) cases
+        -- For each opinion
         forM_ opinions $ \(CaseOpinion name auth _ body) -> do
             let file' = (T.unpack $ "../data/" <> auth <> "/" <> name <> ".txt") 
             let body' = (T.toStrict $ T.concat body)
